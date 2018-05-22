@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project basedir="." name="Pivotal Migration" default="all">
+    
+    <property file="build.properties"/>
+
+    <target name="all" depends="markdown2html, 
+                                add_root, tidy_html, 
+                                preprocess_html, 
+                                add_metadata, update_references, 
+                                prefix_guid, 
+                                extract_meta_info, generate_metadata_info_xml, generate_toc_xml_pks, generate_index_html_pks, 
+                                copy_css_and_images, 
+                                create_zip_package, create_md5_hash"/>    
+    
+    
+    <taskdef resource="net/sf/antcontrib/antlib.xml">
+        <classpath>
+            <pathelement location="./lib/ant-contrib-1.0b3.jar"/>
+        </classpath>
+    </taskdef>
+
+    <target name="markdown2html">
+        <path id="markdown.classpath">
+            <fileset dir="./lib">
+                <include name="*.jar"/>
+            </fileset>
+        </path>
+
+        <taskdef name="md2html" classname="net.sf.markdownant.MarkdownTask">
+            <classpath>
+                <path refid="markdown.classpath"/>
+            </classpath>
+        </taskdef>
+
+        <md2html outputDir="target/temp_html">
+            <fileset dir="docs-pks">
+                <include name="*.erb"/>
+            </fileset>
+            
+        </md2html>
+    </target>
+
+    <target name="add_root">
+        <echo file="target/header.txt" append="true">
+            <![CDATA[
+    <html>
+	  <body>]]>
+        </echo>
+
+        <echo file="target/footer.txt" append="true">
+            <![CDATA[
+      </body>
+	</html> ]]>
+        </echo>
+
+        <copy todir="target/added_root">
+            <fileset dir="target/temp_html"/>
+            <filterchain>
+                <concatfilter prepend="target/header.txt"/>
+                <concatfilter append="target/footer.txt"/>
+            </filterchain>
+            <mapper type="glob" from="*.html.md.html" to="*.html"/>
+        </copy>
+        
+        <delete dir="target/temp_html/"></delete>
+        <delete file="target/header.txt"></delete>
+        <delete file="target/footer.txt"></delete>
+        
+    </target>
+    
+    <target name="tidy_html">
+        <taskdef name="tidy" classname="org.w3c.tidy.ant.JTidyTask">
+            <classpath>
+                <pathelement location="./lib/jtidy.jar"/>
+            </classpath>
+        </taskdef>
+        
+        <tidy destdir="target/cleaned_html">
+            <fileset dir="target/added_root" includes="**/*.html"/>
+            <parameter name="tidy-mark" value="false"/>
+            <parameter name="output-xml" value="yes"/>
+            <parameter name="numeric-entities" value="yes"/>
+            <parameter name="indent-spaces" value="yes"/>
+            <parameter name="indent-attributes" value="no"/>
+            <parameter name="markup" value="yes"/>
+            <parameter name="wrap" value="2000"/>
+            <parameter name="uppercase-tags" value="no"/>
+            <parameter name="uppercase-attributes" value="no"/>
+            <parameter name="quiet" value="no"/>
+            <parameter name="clean" value="yes"/>
+            <parameter name="show-warnings" value="yes"/>
+            <parameter name="break-before-br" value="no"/>
+            <parameter name="hide-comments" value="yes"/>
+            <parameter name="char-encoding" value="UTF-8"/>
+            <!--<parameter name="output-html" value="no"/>-->
+        </tidy>
+        
+        <delete dir="target/added_root/"></delete>
+        
+    </target>
+    
+    <target name="preprocess_html">
+        <xslt classpath="lib/saxon9ee.jar"  basedir="target/cleaned_html" failonerror="yes" includes="*.html"
+            destdir="target/preprocessed" extension=".html" style="preprocess.xsl">
+        </xslt>
+        
+        <delete dir="target/cleaned_html"></delete>
+        
+       
+    </target>
+    
+    <target name="add_metadata">
+        <xslt classpath="lib/saxon9ee.jar"  basedir="target/preprocessed" failonerror="yes" includes="*.html"
+            destdir="target/added_metadata" extension=".html" style="add_metadata_to_html.xsl">
+            
+            <param name="deliverable_name" expression="${deliverable_folder}"/>
+            <param name="filename_guid_prefix" expression="${filename_guid_prefix}"/>
+        </xslt>
+        
+        <delete dir="target/preprocessed"></delete>
+    </target>
+    
+    
+    <target name="update_references">
+        <xslt classpath="lib/saxon9ee.jar"  basedir="target/added_metadata" failonerror="yes" includes="*.html"
+            destdir="target/updated_reference" extension=".html" style="update_references.xsl">
+            
+            <param name="deliverable_name" expression="${deliverable_folder}"/>
+            <param name="filename_guid_prefix" expression="${filename_guid_prefix}"/>
+        </xslt>
+        
+        <delete dir="target/added_metadata"></delete>
+    </target>
+       
+    <target name="prefix_guid">
+        <move todir="target/${deliverable_folder}" includeemptydirs="false">
+            <fileset dir="target/updated_reference">
+                <include name="**/*.html"/>
+            </fileset>
+            <mapper type="glob" from="*" to="${filename_guid_prefix}-*"/>
+        </move>
+        
+        <delete dir="target/updated_reference/"/>
+        
+    </target>
+    
+    <target name="extract_meta_info">
+        <xslt classpath="lib/saxon9ee.jar" basedir="target/${deliverable_folder}"
+            destdir="target/temp_extracted_meta" extension=".html" style="read_file_metadata.xsl">
+            <param name="deliverable_name" expression="${deliverable_folder}"/>
+            <param name="filename_guid_prefix" expression="${filename_guid_prefix}"/>
+        </xslt>
+        
+        <echo file="target/${deliverable_folder}/header.txt" append="true">
+            <![CDATA[
+	<topics>]]>
+        </echo>
+        
+        <echo file="target/${deliverable_folder}/footer.txt" append="true">
+            <![CDATA[
+	</topics>]]>
+        </echo>
+        
+        <concat destfile="target/${deliverable_folder}/metadata_info_temp.xml" fixlastline="yes">
+            <file file="target/${deliverable_folder}/header.txt"/>            
+            <fileset dir="target/temp_extracted_meta"></fileset>
+            <file file="target/${deliverable_folder}/footer.txt"/>
+        </concat>
+        
+        <delete dir="target/temp_extracted_meta/"/>
+        <delete file="target/${deliverable_folder}/header.txt"/>
+        <delete file="target/${deliverable_folder}/footer.txt"/>
+        
+    </target>
+    
+    <target name="generate_metadata_info_xml">
+        <xslt classpath="lib/saxon9ee.jar" in="target/${deliverable_folder}/metadata_info_temp.xml"
+            out="target/${deliverable_folder}/metadata_info_1.xml"
+            style="generate_metadata_info_xml.xsl">
+            
+            <param name="deliverable_name" expression="${deliverable_folder}"/>
+            <param name="filename_guid_prefix" expression="${filename_guid_prefix}"/>
+        </xslt>
+        
+        <delete file="target/${deliverable_folder}/metadata_info_temp.xml"/>
+        
+        <xslt classpath="lib/saxon9ee.jar" in="target/${deliverable_folder}/metadata_info_1.xml"
+            out="target/${deliverable_folder}/metadata_info.xml"
+            style="update_opening_topic.xsl">
+        </xslt>
+        
+        <delete file="target/${deliverable_folder}/metadata_info_1.xml"/>
+        
+    </target>
+    
+    <target name="generate_index_html_pks">
+        <xslt classpath="lib/saxon9ee.jar" in="target/${deliverable_folder}.html"
+            out="target/${deliverable_folder}/index.html" style="generate_index_html_pks.xsl">
+            <param name="deliverable_name" expression="${deliverable_folder}"/>
+            <param name="filename_guid_prefix" expression="${filename_guid_prefix}"/>
+        </xslt>
+        
+    </target>
+    
+    <target name="generate_toc_xml_pks">
+        <xslt classpath="lib/saxon9ee.jar" in="target/${deliverable_folder}.html"
+            out="target/${deliverable_folder}/toc.xml" style="generate_toc_xml_pks.xsl">
+            <param name="deliverable_name" expression="${deliverable_folder}"/>
+            <param name="filename_guid_prefix" expression="${filename_guid_prefix}"/>
+            <param name="opening_page" expression="${opening_page}"/>
+        </xslt>
+        
+    </target>
+    
+    
+    <target name="copy_css_and_images">
+        <copy todir="target/${deliverable_folder}/images" enablemultiplemappings="true">
+            <fileset dir="docs-pks/images" />
+        </copy>
+        <copy file="commonltr.css" todir="target/${deliverable_folder}"/>
+        <copy file="commonrtl.css" todir="target/${deliverable_folder}"/>
+       <!-- <copy file="index.html" todir="target/${deliverable_folder}"/>
+        <copy file="toc.xml" todir="target/${deliverable_folder}"/>-->
+    </target>
+    
+    <target name="create_zip_package">
+        <zip destfile="target/${deliverable_folder}/package/${deliverable_folder}.zip"
+            basedir="target/${deliverable_folder}" update="true"> </zip>
+    </target>
+    
+    <target name="create_md5_hash">
+        <checksum file="target/${deliverable_folder}/package/${deliverable_folder}.zip"
+            algorithm="MD5"/>
+        <loadfile property="md5_hash_value"
+            srcfile="target/${deliverable_folder}/package/${deliverable_folder}.zip.MD5"/>
+        <echo>${deliverable_folder}.zip.MD5</echo>
+        <for param="line" list="${md5_hash_value}" delimiter="${line.separator}">
+            <sequential>
+                <echo message="@{line}"/>
+                <echo file="target/${deliverable_folder}/package/@{line}.md5"
+                    >/publications/html5/${deliverable_folder}.zip&#xa;</echo>
+            </sequential>
+        </for>
+        <delete file="target/${deliverable_folder}/package/${deliverable_folder}.zip.MD5"/>
+    </target>
+    
+    
+    
+</project>
