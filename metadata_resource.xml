@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<deliverables>
+    <deliverable name="PKS_10">
+        <publication_name>VMware Pivotal Container Service 1.0</publication_name>
+        <publication_guid>GUID-02082018-VMWARE-PKS-GUIDE-10</publication_guid>
+        <publication_cms_title>VMware Pivotal Container Service 1.0</publication_cms_title>
+        <product_name>VMware Pivotal Container Service</product_name>
+        <product_version>1.0</product_version>
+        <output_file_name_html>vmware-pks-10</output_file_name_html>
+        <output_file_name_pdf></output_file_name_pdf>
+    </deliverable>
+</deliverables>
